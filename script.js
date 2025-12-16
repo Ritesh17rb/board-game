@@ -59,6 +59,58 @@ const load = async (lib) => import({
 // --- 2. State & Constants ---
 const CFG_KEY = "bootstrapLLMProvider_openaiConfig";
 
+const SCENARIOS = [
+  {
+    title: "Corporate Turnaround",
+    icon: "bi-graph-up-arrow",
+    type: "Strategy",
+    difficulty: "Hard",
+    description: "Revitalize a failing tech giant. excessive debt, and a toxic culture. Can you save the legacy?",
+    domain: "Corporate Turnaround Strategy"
+  },
+  {
+    title: "Startup Launch",
+    icon: "bi-rocket-takeoff",
+    type: "Entrepreneurship",
+    difficulty: "Medium",
+    description: "Navigate the chaos of early-stage funding, product-market fit, and hiring your first engineers.",
+    domain: "Tech Startup Launch"
+  },
+  {
+    title: "Crisis Management",
+    icon: "bi-megaphone-fill",
+    type: "Communication",
+    difficulty: "Hard",
+    description: "A PR disaster has struck a major airline. Manage the press, the public, and the stakeholders.",
+    domain: "Crisis Management & PR"
+  },
+  {
+    title: "Supply Chain Ops",
+    icon: "bi-box-seam-fill",
+    type: "Operations",
+    difficulty: "Medium",
+    description: "Global logistics have broken down. Optimize routes, manage inventory, and keep the factory running.",
+    domain: "Supply Chain Optimization"
+  },
+  {
+    title: "Policy Making",
+    icon: "bi-bank2",
+    type: "Policy",
+    difficulty: "Complex",
+    description: "Design urban planning for a new smart city while balancing budget, citizen happiness, and sustainability.",
+    domain: "Urban Policy & Planning"
+  },
+  {
+    title: "Product Roadmap",
+    icon: "bi-kanban-fill",
+    type: "Product",
+    difficulty: "Medium",
+    description: "Balance new features vs technical debt. Prioritize what to build next for a growing SaaS platform.",
+    domain: "SaaS Product Management"
+  }
+];
+
+
 // --- 3. LLM Integration ---
 function getLLMConfig() {
   try {
@@ -135,47 +187,177 @@ class BoardGame {
   }
 
   renderSetup() {
+    this.container.classList.remove('game-active'); // Ensure clean state
     this.container.innerHTML = `
-      <div class="h-100 d-flex flex-column justify-content-center align-items-center text-white text-center p-5 font-monospace">
-        <h1 class="display-4 mb-4"><i class="bi bi-joystick"></i> Game Generator</h1>
-        <p class="lead mb-4">Turn any subject into a playable strategy board game in seconds.</p>
+      <div class="container mt-4">
+        <h1 class="display-3 my-4 text-center">Strategy Board Game</h1>
+        <h2 class="display-6 text-center text-muted">Master complex decision-making through realistic scenarios</h2>
         
-        <div class="card bg-dark border-light w-100" style="max-width: 500px">
-          <div class="card-body p-4">
-            <h5 class="card-title mb-3">Choose your Challenge</h5>
-            <div class="mb-3 text-start">
-              <label class="form-label text-warning mb-1">What do you want to master?</label>
-              <input type="text" id="domain-input" class="form-control form-control-lg bg-black text-white border-secondary" placeholder="e.g. Quantum Physics, Startup Law, Indian History...">
-            </div>
+        <div class="mx-auto my-5 narrative" style="max-width: 55rem;">
+          <p class="lead mb-4 text-secondary text-center fs-4">An immersive simulation engine where you navigate real-world strategic challenges.</p>
+          <ul class="mb-0 list-unstyled fs-5">
+              <li class="mb-3"><i class="bi bi-caret-right-fill text-primary me-2"></i><strong>Roll & Navigate:</strong> Traverse a unique board tailored to your chosen strategy domain.</li>
+              <li class="mb-3"><i class="bi bi-caret-right-fill text-primary me-2"></i><strong>Solve & Conquer:</strong> Answer AI-generated dilemmas to capture tiles and earn rewards.</li>
+              <li class="mb-3"><i class="bi bi-caret-right-fill text-primary me-2"></i><strong>Master Mechanics:</strong> Build your Streak and avoid Risk zones to maximize your score.</li>
+          </ul>
+        </div>
 
-            <div class="d-grid">
-              <button id="start-game-btn" class="btn btn-success btn-lg">
-                <i class="bi bi-stars"></i> Generate Game Board
+        <div class="row g-3" id="demo-cards">
+          ${SCENARIOS.map((s, i) => `
+            <div class="col-md-6 col-lg-4">
+              <div class="card h-100 demo-card" data-index="${i}">
+                <div class="card-body">
+                  <div class="d-flex justify-content-between align-items-start mb-2">
+                    <h5 class="card-title fw-bold text-primary mb-0">${s.title}</h5>
+                    <i class="bi ${s.icon} fs-3 text-secondary"></i>
+                  </div>
+                  <div class="mb-3">
+                    <span class="badge bg-light text-dark border">${s.type}</span>
+                    <span class="badge bg-light text-dark border">${s.difficulty}</span>
+                  </div>
+                  <p class="card-text text-muted">${s.description}</p>
+                </div>
+              </div>
+            </div>
+          `).join('')}
+          
+          <!-- Custom Scenario -->
+           <div class="col-md-6 col-lg-4">
+              <div class="card h-100 demo-card border-info" id="custom-scenario-card">
+                <div class="card-body">
+                  <h5 class="card-title fw-bold text-info"><i class="bi bi-magic me-2"></i>Custom Scenario</h5>
+                  <p class="card-text text-muted mb-3">Design your own challenge. Enter any topic or domain.</p>
+                  <div class="input-group">
+                    <input type="text" id="domain-input" class="form-control" placeholder="e.g. Ancient Rome...">
+                    <button class="btn btn-outline-info" id="start-custom-btn">Go</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+        </div>
+      </div>
+
+      <!-- Prep Modal -->
+      <div class="modal fade" id="prepModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title" id="prepModalLabel">Mission Briefing</h5>
+              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+              <h4 id="prep-title" class="mb-3">Scenario Title</h4>
+              <p id="prep-desc" class="text-muted mb-4">Description goes here.</p>
+              
+              <hr>
+              
+              <div class="mb-3">
+                <label class="form-label fw-bold">Select Difficulty</label>
+                <div class="btn-group w-100" role="group" aria-label="Difficulty selection">
+                  <input type="radio" class="btn-check" name="difficulty" id="diff-easy" value="Easy" autocomplete="off">
+                  <label class="btn btn-outline-success" for="diff-easy">Easy</label>
+
+                  <input type="radio" class="btn-check" name="difficulty" id="diff-normal" value="Normal" autocomplete="off" checked>
+                  <label class="btn btn-outline-primary" for="diff-normal">Normal</label>
+
+                  <input type="radio" class="btn-check" name="difficulty" id="diff-hard" value="Hard" autocomplete="off">
+                  <label class="btn btn-outline-danger" for="diff-hard">Hard</label>
+                </div>
+                <div class="form-text mt-2" id="diff-help">Standard resources. Balanced events.</div>
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+              <button type="button" class="btn btn-primary px-4" id="btn-launch-sim">
+                <i class="bi bi-play-fill"></i> Start Simulation
               </button>
             </div>
           </div>
         </div>
-        
-        <div class="mt-4 text-white-50 small">
-          <i class="bi bi-cpu"></i> Powered by your LLM Advisor
-        </div>
       </div>
     `;
 
-    this.container.querySelector('#start-game-btn').onclick = () => {
-      const input = this.container.querySelector('#domain-input').value.trim();
-      if (!input) return;
-      this.domain = input;
-      this.startGameGeneration();
+    // Initialize Bootstrap Modal
+    const modalEl = this.container.querySelector('#prepModal');
+    // Check if Bootstrap is available on window (it should be via script tag)
+    this.prepModal = new bootstrap.Modal(modalEl);
+
+    // Event Listeners for Scenarios
+    this.container.querySelectorAll('.demo-card[data-index]').forEach(card => {
+        card.onclick = () => {
+            const idx = card.dataset.index;
+            this.openPrepModal(SCENARIOS[idx]);
+        };
+    });
+
+    // Custom Scenario Handler
+    const customBtn = this.container.querySelector('#start-custom-btn');
+    if (customBtn) {
+        customBtn.onclick = (e) => {
+            e.stopPropagation();
+            const input = this.container.querySelector('#domain-input').value.trim();
+            if (!input) return;
+            // Open modal with custom data
+            this.openPrepModal({
+                title: input,
+                description: `A custom generated scenario based on "${input}".`,
+                domain: input,
+                type: 'Custom',
+                difficulty: 'Unknown'
+            });
+        };
+    }
+
+    // Difficulty Help Text
+    const diffInputs = this.container.querySelectorAll('input[name="difficulty"]');
+    const helpText = this.container.querySelector('#diff-help');
+    const msgs = {
+        'Easy': 'High starting capital (+1500). Simple questions. Forgiving events.',
+        'Normal': 'Standard capital (+1000). Professional questions. Balanced challenge.',
+        'Hard': 'Low capital (+500). Complex, multi-layered problems. High stakes.'
+    };
+    diffInputs.forEach(inp => {
+        inp.onchange = () => {
+             helpText.textContent = msgs[inp.value];
+        };
+    });
+
+    // Launch Button
+    this.container.querySelector('#btn-launch-sim').onclick = () => {
+        const diff = this.container.querySelector('input[name="difficulty"]:checked').value;
+        this.prepModal.hide();
+        this.startGameGeneration(diff);
     };
   }
 
-  async startGameGeneration() {
+  openPrepModal(scenario) {
+      this.selectedScenario = scenario;
+      const m = this.container.querySelector('#prepModal');
+      m.querySelector('#prep-title').textContent = scenario.title;
+      m.querySelector('#prep-desc').textContent = scenario.description;
+      
+      // Reset difficulty to Normal
+      m.querySelector('#diff-normal').checked = true;
+      m.querySelector('#diff-help').textContent = 'Standard capital (+1000). Professional questions. Balanced challenge.';
+      
+      this.domain = scenario.domain || scenario.title;
+      this.prepModal.show();
+  }
+
+  async startGameGeneration(difficulty = "Normal") {
+    this.difficulty = difficulty;
+    
+    // Set initial state based on difficulty
+    if (difficulty === 'Easy') this.score = 1500;
+    else if (difficulty === 'Hard') this.score = 500;
+    else this.score = 1000;
+
     this.renderLayout(true); // Show layout with loading state
     await this.generateBoardContent(this.domain);
   }
 
   renderLayout(isLoading = false) {
+    this.container.classList.add('game-active'); // Enable Dark Board Mode
     this.container.innerHTML = `
       <div class="score-panel justify-content-center gap-3">
         <div class="score-item border border-warning text-warning"><i class="bi bi-coin"></i> <span id="game-score">${this.score}</span></div>
@@ -186,7 +368,10 @@ class BoardGame {
             <i class="bi bi-fire"></i> <span id="game-streak">${this.streak}</span> Streak
         </div>
 
-        <div class="score-item border border-secondary text-white small">${this.domain ? this.domain.toUpperCase() : 'LOADING...'}</div>
+        <div class="score-item border border-secondary text-white small">
+            ${this.domain ? this.domain.toUpperCase() : 'LOADING...'} 
+            <span class="badge bg-secondary ms-2">${this.difficulty || 'Normal'}</span>
+        </div>
       </div>
       
       <div class="board-container" id="game-board">
@@ -198,7 +383,7 @@ class BoardGame {
              <p class="small text-muted">Generating tiles, rules, and economy...</p>` 
             : 
             `<h2 class="text-white mb-2" style="text-shadow:0 0 10px white">${this.domain}</h2>
-             <div class="small text-white-50 mb-4">STRATEGY EDITION</div>
+             <div class="small text-white-50 mb-4">STRATEGY EDITION • ${this.difficulty.toUpperCase()}</div>
              <div id="dice-display" class="mb-3"><i class="bi bi-dice-6"></i></div>
              <button id="roll-btn" class="btn btn-primary btn-lg px-5 shadow-lg">ROLL DICE</button>
              <p class="mt-3 text-white-50 small" id="game-log">Press Roll to start!</p>`
@@ -216,6 +401,7 @@ class BoardGame {
           <div class="modal-body mt-3">
             <p id="modal-question" class="fs-5 mb-4">...</p>
             <div id="modal-options" class="modal-options w-100"></div>
+            <div id="modal-lifelines" class="mt-3"></div>
             <div id="modal-feedback" class="mt-3 d-none"></div>
           </div>
           <div class="modal-footer mt-4 text-end">
@@ -350,7 +536,7 @@ async generateBoardContent(domain) {
       // Update Center Hub
       this.container.querySelector('.board-center').innerHTML = `
              <h2 class="text-white mb-2" style="text-shadow:0 0 10px white; text-transform: capitalize;">${domain}</h2>
-             <div class="small text-white-50 mb-4">STRATEGY EDITION</div>
+             <div class="small text-white-50 mb-4">STRATEGY EDITION • ${this.difficulty.toUpperCase()}</div>
              <div id="dice-display" class="mb-3"><i class="bi bi-dice-6"></i></div>
              <button id="roll-btn" class="btn btn-primary btn-lg px-5 shadow-lg">ROLL DICE</button>
              <p class="mt-3 text-white-50 small" id="game-log">Press Roll to start!</p>
@@ -397,32 +583,15 @@ setTile(index, name, icon, type, metadata = null) {
     if (type === 'corner') {
       // Keep using Bootstrap Icons for corners (consistent UI)
       t.element.classList.add('corner');
-      innerHTML = `<i class="bi bi-${icon} tile-icon"></i><div style="line-height:1.1">${name}</div>`;
+      innerHTML = `<i class="bi bi-${icon} tile-icon"></i><div>${name}</div>`;
     } else {
       // Use Iconify for properties
       t.element.classList.add('property');
       
-      // CSS to make the icon look like a graphical background
-      const iconStyle = `
-          position: absolute;
-          top: 50%;
-          left: 50%;
-          transform: translate(-50%, -50%);
-          font-size: 3.5rem;
-          opacity: 0.25;
-          z-index: 0;
-          pointer-events: none;
-      `;
-      
-      const textStyle = `
-          position: relative; 
-          z-index: 1; 
-          text-shadow: 0 1px 3px rgba(0,0,0,0.8);
-      `;
-
+      // No inline styles for overlap - handled by CSS now for clean stacking
       innerHTML = `
-          <span class="iconify" data-icon="${icon}" style="${iconStyle}"></span>
-          <div style="${textStyle}">${name}</div>
+          <span class="iconify" data-icon="${icon}"></span>
+          <div>${name}</div>
       `;
     }
 
@@ -504,6 +673,7 @@ setTile(index, name, icon, type, metadata = null) {
     this.openModal(`Topic: ${topic}`);
     const qEl = this.container.querySelector('#modal-question');
     const optsEl = this.container.querySelector('#modal-options');
+    const lifelinesEl = this.container.querySelector('#modal-lifelines');
     
     // UI Loading State
     qEl.innerHTML = `<div class="d-flex align-items-center justify-content-center gap-3">
@@ -511,11 +681,27 @@ setTile(index, name, icon, type, metadata = null) {
         <div>Consulting the ${this.domain} Expert...</div>
     </div>`;
     optsEl.innerHTML = '';
+    lifelinesEl.innerHTML = ''; // Clear previous lifelines
     
+    // Difficulty Modifiers
+    let difficultyNotes = "";
+    if (this.difficulty === "Easy") {
+        difficultyNotes = "Question should be foundational/basic. Options should be clearly distinguishable.";
+    } else if (this.difficulty === "Hard") {
+        difficultyNotes = "Question should be complex, involving trade-offs or nuanced situational analysis. Options should be plausible distractors.";
+    } else {
+        difficultyNotes = "Question should be standard professional difficulty.";
+    }
+
     // 1. Stricter Prompt
     const prompt = `You are a game engine.
     Topic: "${topic}" inside Domain: "${this.domain}".
-    Task: Generate a multiple-choice question.
+    Difficulty Level: "${this.difficulty}".
+    
+    Instructions:
+    ${difficultyNotes}
+
+    Task: Generate a multiple-choice question with a helpful hint.
     
     CRITICAL: Output valid JSON only. Do not stutter. Do not use Markdown.
     
@@ -524,6 +710,7 @@ setTile(index, name, icon, type, metadata = null) {
       "question": "The question text here?",
       "options": ["Option A", "Option B", "Option C", "Option D"],
       "correctIndex": 0,
+      "hint": "A subtle clue that points to the right principle without giving it away.",
       "explanation": "Why A is correct.",
       "reward": 150
     }`;
@@ -555,7 +742,7 @@ setTile(index, name, icon, type, metadata = null) {
 
         this.currentQuestionData = data;
         
-        // 3. Render
+        // 3. Render Question & Options
         this.container.querySelector('#modal-reward').textContent = `Reward: ${data.reward || 100}`;
         qEl.textContent = data.question;
         optsEl.innerHTML = '';
@@ -564,11 +751,29 @@ setTile(index, name, icon, type, metadata = null) {
         
         data.options.forEach((opt, idx) => {
             const btn = document.createElement('button');
-            btn.className = "btn btn-outline-light w-100 text-start mb-2 p-3 position-relative";
+            btn.className = "btn btn-outline-light w-100 text-start mb-2 p-3 position-relative option-btn";
+            btn.dataset.idx = idx; // Store index for 50/50
             btn.textContent = opt;
             btn.onclick = () => this.handleAnswer(idx, btn);
             optsEl.appendChild(btn);
         });
+
+        // 4. Render Lifelines
+        lifelinesEl.innerHTML = `
+            <div class="d-flex gap-2 justify-content-end mt-2">
+                <button class="btn btn-outline-info btn-sm" id="btn-hint" title="Get a Clue">
+                    <i class="bi bi-lightbulb-fill"></i> Hint (-50)
+                </button>
+                <button class="btn btn-outline-warning btn-sm" id="btn-5050" title="Remove 2 Wrong Answers">
+                    <i class="bi bi-scissors"></i> 50/50 (-100)
+                </button>
+            </div>
+            <div id="hint-display" class="alert alert-info mt-2 d-none small"></div>
+        `;
+
+        // Attach Lifeline Events
+        this.container.querySelector('#btn-hint').onclick = (e) => this.handleUseHint(data.hint, e.target.closest('button'));
+        this.container.querySelector('#btn-5050').onclick = (e) => this.handleFiftyFifty(data.correctIndex, e.target.closest('button'));
         
     } catch(e) {
         console.error(e);
@@ -579,12 +784,62 @@ setTile(index, name, icon, type, metadata = null) {
     }
   }
 
+  handleUseHint(hintText, btn) {
+      if (this.score < 50) {
+          alert("Not enough credits!");
+          return;
+      }
+      this.score -= 50;
+      this.updateUI();
+      
+      const display = this.container.querySelector('#hint-display');
+      display.textContent = hintText || "No hint available.";
+      display.classList.remove('d-none');
+      
+      btn.disabled = true;
+      btn.innerHTML = `<i class="bi bi-check"></i> Used`;
+  }
+
+  handleFiftyFifty(correctIdx, btn) {
+      if (this.score < 100) {
+          alert("Not enough credits!");
+          return;
+      }
+      this.score -= 100;
+      this.updateUI();
+
+      const inputs = Array.from(this.container.querySelectorAll('.option-btn'));
+      const wrongIndices = inputs
+          .map((_, i) => i)
+          .filter(i => i !== correctIdx);
+      
+      // Shuffle wrong indices and take first 2
+      for (let i = wrongIndices.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [wrongIndices[i], wrongIndices[j]] = [wrongIndices[j], wrongIndices[i]];
+      }
+      const toRemove = wrongIndices.slice(0, 2);
+
+      inputs.forEach((inp, i) => {
+          if (toRemove.includes(i)) {
+              inp.disabled = true;
+              inp.style.opacity = "0.3";
+              inp.innerHTML = `<del>${inp.textContent}</del>`;
+          }
+      });
+
+      btn.disabled = true;
+      btn.innerHTML = `<i class="bi bi-check"></i> Used`;
+  }
+
   handleAnswer(selectedIdx, btn) {
       const data = this.currentQuestionData;
       const feedback = this.container.querySelector('#modal-feedback');
       const allBtns = this.container.querySelectorAll('#modal-options button');
       
+      // Disable everything
       allBtns.forEach(b => b.disabled = true);
+      this.container.querySelectorAll('#modal-lifelines button').forEach(b => b.disabled = true);
       
       if (selectedIdx === data.correctIndex) {
           btn.classList.remove('btn-outline-light');
@@ -599,7 +854,6 @@ setTile(index, name, icon, type, metadata = null) {
           if (!currentTile.mastered) {
               currentTile.mastered = true;
               currentTile.element.classList.add('mastered-tile');
-              // Add gold border or effect
               currentTile.element.style.borderColor = "#ffd700";
               currentTile.element.style.boxShadow = "0 0 15px #ffd700";
           }
@@ -609,6 +863,7 @@ setTile(index, name, icon, type, metadata = null) {
           
           this.score += totalReward;
           this.xp += 50;
+
 
           let msg = `<div class="text-success fs-4 fw-bold"><i class="bi bi-check-circle-fill"></i> Correct! +${totalReward}</div>`;
           if (this.streak > 1) msg += `<div class="text-warning fw-bold animate-pulse">🔥 ${this.streak}x Streak! (x${streakBonus.toFixed(1)})</div>`;

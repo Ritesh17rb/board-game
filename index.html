@@ -9,7 +9,343 @@
         href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMiAzMiI+PGNpcmNsZSBjeD0iMTYiIGN5PSIxNiIgcj0iMTUiIGZpbGw9IiMyNTYzZWIiLz48cGF0aCBmaWxsPSIjZmZmIiBkPSJtMTYgNyAyIDcgNyAyLTcgMi0yIDctMi03LTctMiA3LTJaIi8+PC9zdmc+">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
-    <link rel="stylesheet" href="boardgame.css">
+    <style>
+        /* Board Game Styles */
+        #board-game-view {
+            min-height: 80vh;
+            padding: 2rem;
+            border-radius: 1rem;
+            animation: fadeIn 0.5s ease-in-out;
+        }
+
+        #board-game-view.game-active {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: #fff;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+        }
+
+        .narrative {
+            max-inline-size: 40rem;
+            margin-left: auto;
+            margin-right: auto;
+            /* text-align: center; */
+            /* Align left for lists usually looks better, but let's keep it clean */
+        }
+
+        .demo-card {
+            transition: all 0.2s ease;
+            border: 1px solid var(--bs-border-color);
+            cursor: pointer;
+        }
+
+        .demo-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            border-color: var(--bs-primary);
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+
+            to {
+                opacity: 1;
+            }
+        }
+
+        .intro-text {
+            max-width: 800px;
+            margin: 0 auto 3rem auto;
+            text-align: center;
+        }
+
+        .scenarios-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 1.5rem;
+            max-width: 1200px;
+            margin: 0 auto 2rem auto;
+        }
+
+        .scenario-card {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 1.5rem;
+            transition: all 0.2s ease;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+        }
+
+        .scenario-card:hover {
+            transform: translateY(-5px);
+            background: rgba(255, 255, 255, 0.1);
+            border-color: var(--bs-primary);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+        }
+
+        .scenario-icon {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+            color: var(--bs-primary);
+            display: inline-block;
+        }
+
+        .scenario-header {
+            margin-bottom: 1rem;
+        }
+
+        .scenario-title {
+            font-size: 1.25rem;
+            font-weight: 700;
+            margin-bottom: 0.25rem;
+            color: #fff;
+        }
+
+        .scenario-meta {
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: rgba(255, 255, 255, 0.6);
+            margin-bottom: 0.5rem;
+        }
+
+        .scenario-description {
+            font-size: 0.95rem;
+            line-height: 1.5;
+            color: rgba(255, 255, 255, 0.8);
+            flex-grow: 1;
+        }
+
+        .board-container {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            grid-template-rows: repeat(6, 1fr);
+            gap: 10px;
+            width: 100%;
+            max-width: 800px;
+            aspect-ratio: 1 / 1;
+            margin: 0 auto;
+            position: relative;
+            background: rgba(255, 255, 255, 0.05);
+            padding: 20px;
+            border-radius: 15px;
+            border: 2px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .tile {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+            /* Changed from center */
+            align-items: center;
+            text-align: center;
+            font-size: 0.75rem;
+            font-weight: bold;
+            padding: 8px 4px;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+            cursor: pointer;
+        }
+
+        .tile:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+            background: rgba(255, 255, 255, 0.2);
+            z-index: 2;
+        }
+
+        .tile.corner {
+            background: rgba(255, 215, 0, 0.2);
+            border-color: rgba(255, 215, 0, 0.5);
+            justify-content: center;
+            /* Corners can stay centered */
+        }
+
+        .tile.player-here {
+            box-shadow: 0 0 15px #0d6efd;
+            border-color: #0d6efd;
+        }
+
+        .tile-icon {
+            font-size: 1.5rem;
+            margin-bottom: 5px;
+            display: block;
+            /* Ensure block for stacking */
+        }
+
+        /* Iconify overrides for cleaner look */
+        .tile .iconify {
+            font-size: 2rem !important;
+            /* Smaller than background version */
+            margin-bottom: 6px;
+            opacity: 1 !important;
+            position: static !important;
+            transform: none !important;
+            display: block !important;
+        }
+
+        .tile div {
+            /* Text container */
+            position: static !important;
+            text-shadow: none !important;
+            line-height: 1.2;
+        }
+
+
+        /* Center of the board */
+        .board-center {
+            grid-column: 2 / 6;
+            grid-row: 2 / 6;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+            padding: 20px;
+        }
+
+        .game-controls {
+            text-align: center;
+            margin-top: 20px;
+        }
+
+        #dice-display {
+            font-size: 3rem;
+            margin: 10px;
+            display: inline-block;
+            animation: bounce 0.5s infinite alternate paused;
+        }
+
+        #dice-display.rolling {
+            animation-play-state: running;
+        }
+
+        @keyframes bounce {
+            from {
+                transform: translateY(0);
+            }
+
+            to {
+                transform: translateY(-10px);
+            }
+        }
+
+        .player-token {
+            width: 20px;
+            height: 20px;
+            background-color: #0d6efd;
+            border-radius: 50%;
+            border: 2px solid #fff;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 0 10px #0d6efd;
+            transition: all 0.5s ease-in-out;
+            z-index: 10;
+        }
+
+        /* Question Modal Overlay */
+        .game-modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            backdrop-filter: blur(5px);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+
+        .game-modal-overlay.active {
+            opacity: 1;
+            pointer-events: all;
+        }
+
+        .game-modal {
+            background: #222;
+            border: 1px solid #444;
+            padding: 30px;
+            border-radius: 15px;
+            width: 95%;
+            /* Widened for mobile */
+            max-width: 800px;
+            /* Widened from 600px */
+            color: #fff;
+            box-shadow: 0 0 30px rgba(0, 0, 0, 0.5);
+            max-height: 90vh;
+            /* Prevent overflowing screen height */
+            overflow-y: auto;
+            /* Enable scrolling for long content */
+            display: flex;
+            flex-direction: column;
+        }
+
+        .modal-body {
+            overflow-y: auto;
+            /* Ensure body scrolls if header/footer take space */
+        }
+
+        .modal-header h3 {
+            margin-top: 0;
+            color: #0d6efd;
+        }
+
+        .modal-options button {
+            display: block;
+            width: 100%;
+            margin: 10px 0;
+            padding: 10px;
+            text-align: left;
+            background: #333;
+            color: #fff;
+            border: 1px solid #555;
+            border-radius: 5px;
+            transition: background 0.2s;
+        }
+
+        .modal-options button:hover {
+            background: #444;
+        }
+
+        .modal-options button.correct {
+            background: #198754;
+            border-color: #198754;
+        }
+
+        .modal-options button.wrong {
+            background: #dc3545;
+            border-color: #dc3545;
+        }
+
+        .score-panel {
+            display: flex;
+            gap: 20px;
+            font-size: 1.2rem;
+            margin-bottom: 20px;
+        }
+
+        .score-item {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 10px 20px;
+            border-radius: 20px;
+        }
+    </style>
 </head>
 
 <body>
