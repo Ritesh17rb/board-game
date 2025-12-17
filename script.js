@@ -57,7 +57,131 @@ const load = async (lib) => import({
 }[lib]);
 
 // --- 2. State & Constants ---
+// --- 2. State & Constants ---
 const CFG_KEY = "bootstrapLLMProvider_openaiConfig";
+
+// Sound Manager using Web Audio API (No external files needed, supports custom overrides)
+class SoundManager {
+    constructor() {
+        this.enabled = true;
+        this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+        this.rollBuffer = null;
+        this.loadRollSound();
+    }
+
+    toggle() {
+        this.enabled = !this.enabled;
+        return this.enabled;
+    }
+
+    async loadRollSound() {
+        try {
+            const response = await fetch('dice.mp3');
+            if (response.ok) {
+                const arrayBuffer = await response.arrayBuffer();
+                this.rollBuffer = await this.ctx.decodeAudioData(arrayBuffer);
+            }
+        } catch (e) {
+            console.warn("Could not load dice.mp3, utilizing synthetic fallback.", e);
+        }
+    }
+
+    play(type) {
+        if (!this.enabled) return;
+        if (this.ctx.state === 'suspended') this.ctx.resume();
+
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+
+        const now = this.ctx.currentTime;
+
+        switch (type) {
+            case 'roll':
+                if (this.rollBuffer) {
+                    // Play mp3
+                    const source = this.ctx.createBufferSource();
+                    source.buffer = this.rollBuffer;
+                    source.connect(this.ctx.destination);
+                    source.start(now);
+                } else {
+                    // Fallback: Noise buffer for rolling sound simulation
+                    const bufferSize = this.ctx.sampleRate * 0.5; // 0.5 sec
+                    const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+                    const data = buffer.getChannelData(0);
+                    for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+                    
+                    const noise = this.ctx.createBufferSource();
+                    noise.buffer = buffer;
+                    const noiseGain = this.ctx.createGain();
+                    noise.connect(noiseGain);
+                    noiseGain.connect(this.ctx.destination);
+                    noiseGain.gain.setValueAtTime(0.5, now);
+                    noiseGain.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
+                    noise.start(now);
+                }
+                break;
+
+            case 'move':
+                // Short "tick"
+                osc.frequency.setValueAtTime(600, now);
+                osc.type = 'sine';
+                gain.gain.setValueAtTime(0.1, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
+                osc.start(now);
+                osc.stop(now + 0.1);
+                break;
+
+            case 'correct':
+                // Major arpeggio
+                this.playTone(523.25, 0.1, now); // C5
+                this.playTone(659.25, 0.1, now + 0.1); // E5
+                this.playTone(783.99, 0.2, now + 0.2); // G5
+                break;
+
+            case 'wrong':
+                // Low buzz
+                osc.frequency.setValueAtTime(150, now);
+                osc.frequency.linearRampToValueAtTime(100, now + 0.3);
+                osc.type = 'sawtooth';
+                gain.gain.setValueAtTime(0.2, now);
+                gain.gain.linearRampToValueAtTime(0.001, now + 0.3);
+                osc.start(now);
+                osc.stop(now + 0.3);
+                break;
+            
+            case 'levelup':
+                // Fanfare
+                this.playTone(523.25, 0.1, now);
+                this.playTone(523.25, 0.1, now + 0.1);
+                this.playTone(523.25, 0.1, now + 0.2);
+                this.playTone(659.25, 0.4, now + 0.3);
+                break;
+                
+            case 'hover':
+                osc.frequency.setValueAtTime(400, now);
+                gain.gain.setValueAtTime(0.02, now);
+                gain.gain.linearRampToValueAtTime(0.001, now + 0.05);
+                osc.start(now);
+                osc.stop(now + 0.05);
+                break;
+        }
+    }
+
+    playTone(freq, duration, time) {
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        
+        osc.frequency.setValueAtTime(freq, time);
+        gain.gain.setValueAtTime(0.1, time);
+        gain.gain.linearRampToValueAtTime(0.001, time + duration);
+        osc.start(time);
+        osc.stop(time + duration);
+    }
+}
 
 const SCENARIOS = [
   {
@@ -167,12 +291,14 @@ class BoardGame {
     this.playerPosition = 0;
     this.score = 1000;
     this.xp = 0;
+    this.level = 1; // Leveling System
     this.domain = "";
     this.tiles = [];
     this.isRolling = false;
     this.boardSize = 20;
     this.currency = "Credits";
-    this.streak = 0; // New: Streak tracking
+    this.streak = 0;
+    this.sounds = new SoundManager(); // Init Sounds
   }
 
  async init() {
@@ -359,19 +485,32 @@ class BoardGame {
   renderLayout(isLoading = false) {
     this.container.classList.add('game-active'); // Enable Dark Board Mode
     this.container.innerHTML = `
-      <div class="score-panel justify-content-center gap-3">
-        <div class="score-item border border-warning text-warning"><i class="bi bi-coin"></i> <span id="game-score">${this.score}</span></div>
-        <div class="score-item border border-info text-info"><i class="bi bi-mortarboard-fill"></i> <span id="game-knowledge">${this.xp}</span> XP</div>
-        
-        <!-- Streak Panel -->
-        <div class="score-item border border-danger text-danger" id="streak-panel" style="opacity: ${this.streak > 1 ? '1' : '0.5'}">
-            <i class="bi bi-fire"></i> <span id="game-streak">${this.streak}</span> Streak
-        </div>
+      <div class="d-flex justify-content-between align-items-center mb-3">
+          <div class="score-panel d-flex gap-3 align-items-center m-0">
+            <div class="score-item border border-warning text-warning"><i class="bi bi-coin"></i> <span id="game-score">${this.score}</span></div>
+            <div class="score-item border border-info text-info"><i class="bi bi-mortarboard-fill"></i> <span id="game-knowledge">${this.xp}</span> XP</div>
+            
+            <!-- Level Badge with Tooltip -->
+            <div class="score-item border border-light text-white position-relative" id="level-badge" title="Current Level">
+                <i class="bi bi-graph-up-arrow"></i> Lvl <span id="game-level">${this.level}</span>
+                <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" id="perk-badge" style="display: none; font-size: 0.6rem;">
+                    PERK
+                </span>
+            </div>
 
-        <div class="score-item border border-secondary text-white small">
-            ${this.domain ? this.domain.toUpperCase() : 'LOADING...'} 
-            <span class="badge bg-secondary ms-2">${this.difficulty || 'Normal'}</span>
-        </div>
+            <!-- Streak Panel -->
+            <div class="score-item border border-danger text-danger" id="streak-panel" style="opacity: ${this.streak > 1 ? '1' : '0.5'}">
+                <i class="bi bi-fire"></i> <span id="game-streak">${this.streak}</span>
+            </div>
+          </div>
+
+          <button id="sound-toggle" class="btn btn-outline-secondary btn-sm rounded-circle" style="width: 40px; height: 40px;">
+             <i class="bi bi-volume-up-fill"></i>
+          </button>
+      </div>
+      
+      <div class="text-center text-white-50 mb-3 small">
+        ${this.domain ? this.domain.toUpperCase() : 'LOADING...'} • ${this.difficulty || 'Normal'}
       </div>
       
       <div class="board-container" id="game-board">
@@ -383,7 +522,7 @@ class BoardGame {
              <p class="small text-muted">Generating tiles, rules, and economy...</p>` 
             : 
             `<h2 class="text-white mb-2" style="text-shadow:0 0 10px white">${this.domain}</h2>
-             <div class="small text-white-50 mb-4">STRATEGY EDITION • ${this.difficulty.toUpperCase()}</div>
+             <div class="small text-white-50 mb-4">STRATEGY EDITION</div>
              <div id="dice-display" class="mb-3"><i class="bi bi-dice-6"></i></div>
              <button id="roll-btn" class="btn btn-primary btn-lg px-5 shadow-lg">ROLL DICE</button>
              <p class="mt-3 text-white-50 small" id="game-log">Press Roll to start!</p>`
@@ -434,6 +573,17 @@ class BoardGame {
     const btn = this.container.querySelector('#roll-btn');
     if(btn) btn.onclick = () => this.handleRoll();
     this.container.querySelector('#modal-close-btn').onclick = () => this.closeModal();
+    
+    const soundBtn = this.container.querySelector('#sound-toggle');
+    if (soundBtn) {
+        soundBtn.onclick = () => {
+             const enabled = this.sounds.toggle();
+             soundBtn.innerHTML = enabled ? '<i class="bi bi-volume-up-fill"></i>' : '<i class="bi bi-volume-mute-fill"></i>';
+             soundBtn.classList.toggle('btn-outline-secondary');
+             soundBtn.classList.toggle('btn-outline-danger');
+             this.sounds.play('hover'); // Feedback
+        };
+    }
   }
 
   createTileDOM(index, row, col, parent) {
@@ -601,6 +751,7 @@ setTile(index, name, icon, type, metadata = null) {
   async handleRoll() {
     if (this.isRolling) return;
     this.isRolling = true;
+    this.sounds.play('roll');
     
     const btn = this.container.querySelector('#roll-btn');
     if (btn) btn.disabled = true;
@@ -631,6 +782,7 @@ setTile(index, name, icon, type, metadata = null) {
     for (let i = 0; i < roll; i++) {
         this.playerPosition = (this.playerPosition + 1) % 20;
         this.moveTokenVisual(this.playerPosition);
+        this.sounds.play('move');
         await new Promise(r => setTimeout(r, 250));
     }
     
@@ -844,6 +996,7 @@ setTile(index, name, icon, type, metadata = null) {
       if (selectedIdx === data.correctIndex) {
           btn.classList.remove('btn-outline-light');
           btn.classList.add('btn-success');
+          this.sounds.play('correct');
           
           // Streak Logic
           this.streak++;
@@ -863,7 +1016,8 @@ setTile(index, name, icon, type, metadata = null) {
           
           this.score += totalReward;
           this.xp += 50;
-
+          
+          this.checkLevelUp();
 
           let msg = `<div class="text-success fs-4 fw-bold"><i class="bi bi-check-circle-fill"></i> Correct! +${totalReward}</div>`;
           if (this.streak > 1) msg += `<div class="text-warning fw-bold animate-pulse">🔥 ${this.streak}x Streak! (x${streakBonus.toFixed(1)})</div>`;
@@ -876,6 +1030,7 @@ setTile(index, name, icon, type, metadata = null) {
           btn.classList.add('btn-danger');
           allBtns[data.correctIndex].classList.remove('btn-outline-light');
           allBtns[data.correctIndex].classList.add('btn-success'); // Show right answer
+          this.sounds.play('wrong');
           
           this.streak = 0; // Reset streak
           
@@ -891,12 +1046,87 @@ setTile(index, name, icon, type, metadata = null) {
       closeBtn.focus();
   }
 
+  checkLevelUp() {
+      // Simple Level Formula: Level = Floor(XP / 200) + 1
+      const newLevel = Math.floor(this.xp / 200) + 1;
+      if (newLevel > this.level) {
+          this.level = newLevel;
+          this.sounds.play('levelup');
+          this.log(`🎉 LEVEL UP! You are now Level ${this.level}`);
+          
+          // Show perk badge temporarily
+          const perk = this.container.querySelector('#perk-badge');
+          if(perk) {
+              perk.textContent = "LEVEL UP!";
+              perk.style.display = 'block';
+              setTimeout(() => perk.style.display = 'none', 3000);
+          }
+      }
+  }
+
+  handleUseHint(hintText, btn) {
+      let cost = 50;
+      if (this.level >= 2) cost = 25; // Level 2 Perk
+
+      if (this.score < cost) {
+          alert(`Not enough credits! Need ${cost}.`);
+          return;
+      }
+      this.score -= cost;
+      this.updateUI();
+      
+      const display = this.container.querySelector('#hint-display');
+      display.textContent = hintText || "No hint available.";
+      display.classList.remove('d-none');
+      
+      btn.disabled = true;
+      btn.innerHTML = `<i class="bi bi-check"></i> Used (-${cost})`;
+  }
+
+  handleFiftyFifty(correctIdx, btn) {
+      let cost = 100;
+      if (this.level >= 5) cost = 50; // Level 5 Perk
+
+      if (this.score < cost) {
+          alert(`Not enough credits! Need ${cost}.`);
+          return;
+      }
+      this.score -= cost;
+      this.updateUI();
+
+      const inputs = Array.from(this.container.querySelectorAll('.option-btn'));
+      const wrongIndices = inputs
+          .map((_, i) => i)
+          .filter(i => i !== correctIdx);
+      
+      // Shuffle wrong indices and take first 2
+      for (let i = wrongIndices.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [wrongIndices[i], wrongIndices[j]] = [wrongIndices[j], wrongIndices[i]];
+      }
+      const toRemove = wrongIndices.slice(0, 2);
+
+      inputs.forEach((inp, i) => {
+          if (toRemove.includes(i)) {
+              inp.disabled = true;
+              inp.style.opacity = "0.3";
+              inp.innerHTML = `<del>${inp.textContent}</del>`;
+          }
+      });
+
+      btn.disabled = true;
+      btn.innerHTML = `<i class="bi bi-check"></i> Used (-${cost})`;
+  }
+// ...
   updateUI() {
       const s = this.container.querySelector('#game-score');
       if(s) s.textContent = this.score;
       
       const x = this.container.querySelector('#game-knowledge');
       if(x) x.textContent = this.xp;
+
+      const l = this.container.querySelector('#game-level');
+      if(l) l.textContent = this.level;
 
       const st = this.container.querySelector('#game-streak');
       const stPanel = this.container.querySelector('#streak-panel');
