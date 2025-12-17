@@ -312,13 +312,146 @@ class BoardGame {
     this.renderSetup();
   }
 
+  setTile(index, name, icon, type, metadata = null) {
+    const t = this.tiles[index];
+    t.name = name;
+    t.type = type;
+    t.icon = icon; // Store for persistence
+    t.metadata = metadata;
+    
+    // Clear previous classes
+    t.element.className = 'tile'; 
+
+    let innerHTML = '';
+
+    if (type === 'corner') {
+      // Keep using Bootstrap Icons for corners (consistent UI)
+      t.element.classList.add('corner');
+      innerHTML = `<i class="bi bi-${icon} tile-icon"></i><div>${name}</div>`;
+    } else {
+      // Use Iconify for properties
+      t.element.classList.add('property');
+      
+      // No inline styles for overlap - handled by CSS now for clean stacking
+      innerHTML = `
+          <span class="iconify" data-icon="${icon}"></span>
+          <div>${name}</div>
+      `;
+    }
+
+    t.element.innerHTML = innerHTML;
+  }
+
+  saveGame() {
+    const state = {
+      domain: this.domain,
+      difficulty: this.difficulty,
+      score: this.score,
+      xp: this.xp,
+      level: this.level,
+      streak: this.streak,
+      playerPosition: this.playerPosition,
+      tiles: this.tiles.map(t => ({
+        name: t.name,
+        type: t.type,
+        icon: t.icon,
+        metadata: t.metadata,
+        mastered: t.mastered
+      })),
+      timestamp: Date.now()
+    };
+    try {
+        localStorage.setItem('boardGameState', JSON.stringify(state));
+    } catch (e) {
+        console.warn("Failed to save game", e);
+    }
+  }
+
+  resumeGame() {
+    const saved = localStorage.getItem('boardGameState');
+    if (!saved) return;
+    let state;
+    try {
+        state = JSON.parse(saved);
+    } catch (e) {
+        console.error("Save file corrupted");
+        return;
+    }
+    
+    // Restore properties
+    this.domain = state.domain;
+    this.difficulty = state.difficulty;
+    this.score = state.score;
+    this.xp = state.xp;
+    this.level = state.level || 1;
+    this.streak = state.streak || 0;
+    this.playerPosition = state.playerPosition;
+
+    // Restore UI
+    this.renderLayout(false); // Skeletons
+    
+    // Restore Tiles
+    state.tiles.forEach((tData, i) => {
+        this.setTile(i, tData.name, tData.icon, tData.type, tData.metadata);
+        
+        // Restore Mastery
+        if (tData.mastered) {
+             this.tiles[i].mastered = true;
+             this.tiles[i].element.classList.add('mastered-tile');
+             this.tiles[i].element.style.borderColor = "#ffd700";
+             this.tiles[i].element.style.boxShadow = "0 0 15px #ffd700";
+        }
+    });
+
+    // Restore Center Hub content
+      this.container.querySelector('.board-center').innerHTML = `
+             <h2 class="text-white mb-2" style="text-shadow:0 0 10px white; text-transform: capitalize;">${this.domain}</h2>
+             <div class="small text-white-50 mb-4">STRATEGY EDITION • ${this.difficulty.toUpperCase()}</div>
+             <div id="dice-display" class="mb-3"><i class="bi bi-dice-6"></i></div>
+             <button id="roll-btn" class="btn btn-primary btn-lg px-5 shadow-lg">ROLL DICE</button>
+             <p class="mt-3 text-white-50 small" id="game-log">Welcome back!</p>
+      `;
+
+    // Move Token
+    this.moveTokenVisual(this.playerPosition);
+    this.updateUI();
+    this.attachEvents();
+    
+    // Trigger Iconify
+    if (window.Iconify) setTimeout(() => window.Iconify.scan(), 100);
+    
+    this.log("Game Resumed!");
+  }
+
   renderSetup() {
     this.container.classList.remove('game-active'); // Ensure clean state
+    
+    // Check for save
+    let resumeHTML = '';
+    const saved = localStorage.getItem('boardGameState');
+    if (saved) {
+        try {
+            const s = JSON.parse(saved);
+            resumeHTML = `
+            <div class="mx-auto my-3" style="max-width: 45rem;">
+                <div class="alert alert-dark border-primary d-flex justify-content-between align-items-center shadow-lg">
+                    <div>
+                        <div class="fw-bold text-primary"><i class="bi bi-save2-fill me-2"></i>Resume: ${s.domain}</div>
+                        <div class="small text-muted">Lvl ${s.level || 1} • ${s.score} Credits</div>
+                    </div>
+                    <button class="btn btn-primary px-4" id="btn-resume-game"><i class="bi bi-play-fill"></i> Continue</button>
+                </div>
+            </div>`;
+        } catch(e) { console.error(e); }
+    }
+
     this.container.innerHTML = `
       <div class="container mt-4">
         <h1 class="display-3 my-4 text-center">Strategy Board Game</h1>
         <h2 class="display-6 text-center text-muted">Master complex decision-making through realistic scenarios</h2>
         
+        ${resumeHTML}
+
         <div class="mx-auto my-5 narrative" style="max-width: 55rem;">
           <p class="lead mb-4 text-secondary text-center fs-4">An immersive simulation engine where you navigate real-world strategic challenges.</p>
           <ul class="mb-0 list-unstyled fs-5">
@@ -433,6 +566,12 @@ class BoardGame {
             });
         };
     }
+    
+    // Resume Handler
+    const resumeBtn = this.container.querySelector('#btn-resume-game');
+    if (resumeBtn) {
+        resumeBtn.onclick = () => this.resumeGame();
+    }
 
     // Difficulty Help Text
     const diffInputs = this.container.querySelectorAll('input[name="difficulty"]');
@@ -457,6 +596,7 @@ class BoardGame {
   }
 
   openPrepModal(scenario) {
+//... (existing logic)
       this.selectedScenario = scenario;
       const m = this.container.querySelector('#prepModal');
       m.querySelector('#prep-title').textContent = scenario.title;
@@ -471,6 +611,7 @@ class BoardGame {
   }
 
   async startGameGeneration(difficulty = "Normal") {
+    localStorage.removeItem('boardGameState'); // Clear old save
     this.difficulty = difficulty;
     
     // Set initial state based on difficulty
@@ -697,6 +838,9 @@ async generateBoardContent(domain) {
       if (window.Iconify) {
           setTimeout(() => window.Iconify.scan(), 100);
       }
+      this.saveGame();
+      
+      this.saveGame();
 
     } catch (e) {
       console.error(e);
@@ -719,34 +863,7 @@ async generateBoardContent(domain) {
       return null;
   }
 
-setTile(index, name, icon, type, metadata = null) {
-    const t = this.tiles[index];
-    t.name = name;
-    t.type = type;
-    t.metadata = metadata;
-    
-    // Clear previous classes
-    t.element.className = 'tile'; 
 
-    let innerHTML = '';
-
-    if (type === 'corner') {
-      // Keep using Bootstrap Icons for corners (consistent UI)
-      t.element.classList.add('corner');
-      innerHTML = `<i class="bi bi-${icon} tile-icon"></i><div>${name}</div>`;
-    } else {
-      // Use Iconify for properties
-      t.element.classList.add('property');
-      
-      // No inline styles for overlap - handled by CSS now for clean stacking
-      innerHTML = `
-          <span class="iconify" data-icon="${icon}"></span>
-          <div>${name}</div>
-      `;
-    }
-
-    t.element.innerHTML = innerHTML;
-  }
 
   async handleRoll() {
     if (this.isRolling) return;
@@ -787,6 +904,7 @@ setTile(index, name, icon, type, metadata = null) {
     }
     
     setTimeout(() => this.handleLanding(), 300);
+    this.saveGame();
     
     const btn = this.container.querySelector('#roll-btn');
     if (btn) btn.disabled = false;
@@ -819,6 +937,7 @@ setTile(index, name, icon, type, metadata = null) {
          this.log("Just resting...");
      }
      this.updateUI();
+     this.saveGame();
   }
 
   async askQuestion(topic) {
@@ -1040,6 +1159,7 @@ setTile(index, name, icon, type, metadata = null) {
       
       feedback.classList.remove('d-none');
       this.updateUI();
+      this.saveGame();
       
       const closeBtn = this.container.querySelector('#modal-close-btn');
       closeBtn.classList.remove('d-none');
