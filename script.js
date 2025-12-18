@@ -183,6 +183,94 @@ class SoundManager {
     }
 }
 
+// Confetti System
+class ConfettiManager {
+    constructor() {
+        this.canvas = document.getElementById('confetti-canvas');
+        if(!this.canvas) return; // Guard
+        this.ctx = this.canvas.getContext('2d');
+        this.particles = [];
+        this.active = false;
+        
+        // Resize handler
+        window.addEventListener('resize', () => this.resize());
+        this.resize();
+    }
+    
+    resize() {
+        this.canvas.width = window.innerWidth;
+        this.canvas.height = window.innerHeight;
+    }
+    
+    burst(x, y) {
+        if(!this.canvas) return;
+        const colors = ['#0d6efd', '#0dcaf0', '#ffc107', '#dc3545', '#198754'];
+        for(let i=0; i<50; i++) {
+            this.particles.push({
+                x: x,
+                y: y,
+                vx: (Math.random() - 0.5) * 20,
+                vy: (Math.random() - 1) * 20,
+                size: Math.random() * 8 + 4,
+                color: colors[Math.floor(Math.random() * colors.length)],
+                gravity: 0.5,
+                drag: 0.95,
+                rotation: Math.random() * 360,
+                rotationSpeed: (Math.random() - 0.5) * 10,
+                life: 1
+            });
+        }
+        if(!this.active) {
+            this.active = true;
+            this.animate();
+        }
+    }
+    
+    fireworks() {
+        const interval = setInterval(() => {
+            this.burst(Math.random() * this.canvas.width, Math.random() * (this.canvas.height / 2));
+        }, 300);
+        setTimeout(() => clearInterval(interval), 2000);
+    }
+    
+    animate() {
+        if(this.particles.length === 0) {
+            this.active = false;
+            this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+            return;
+        }
+        
+        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        
+        // Update & Draw
+        for(let i = this.particles.length - 1; i >= 0; i--) {
+            const p = this.particles[i];
+            p.x += p.vx;
+            p.y += p.vy;
+            p.vy += p.gravity;
+            p.vx *= p.drag;
+            p.vy *= p.drag;
+            p.rotation += p.rotationSpeed;
+            p.life -= 0.015;
+            
+            if(p.life <= 0) {
+                this.particles.splice(i, 1);
+                continue;
+            }
+            
+            this.ctx.save();
+            this.ctx.translate(p.x, p.y);
+            this.ctx.rotate((p.rotation * Math.PI) / 180);
+            this.ctx.globalAlpha = p.life;
+            this.ctx.fillStyle = p.color;
+            this.ctx.fillRect(-p.size/2, -p.size/2, p.size, p.size);
+            this.ctx.restore();
+        }
+        
+        requestAnimationFrame(() => this.animate());
+    }
+}
+
 const SCENARIOS = [
   {
     title: "Corporate Turnaround",
@@ -298,6 +386,7 @@ class BoardGame {
     this.boardSize = 20;
     this.currency = "Credits";
     this.streak = 0;
+    this.confetti = new ConfettiManager();
     this.sounds = new SoundManager(); // Init Sounds
   }
 
@@ -405,7 +494,16 @@ class BoardGame {
 
     // Restore Center Hub content
       this.container.querySelector('.board-center').innerHTML = `
-             <div id="dice-display" class="mb-4"><i class="bi bi-dice-6"></i></div>
+             <div class="dice-scene">
+               <div class="cube" id="dice-cube">
+                 <div class="cube__face cube__face--1 face-1"><div class="dot"></div></div>
+                 <div class="cube__face cube__face--2 face-2"><div class="dot"></div><div class="dot"></div></div>
+                 <div class="cube__face cube__face--3 face-3"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+                 <div class="cube__face cube__face--4 face-4"><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+                 <div class="cube__face cube__face--5 face-5"><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+                 <div class="cube__face cube__face--6 face-6"><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+               </div>
+             </div>
              <button id="roll-btn" class="shadow-lg">ROLL DICE</button>
              <p class="mt-4 opacity-75 small text-uppercase fw-bold" id="game-log" style="letter-spacing: 1px;">Welcome back!</p>
       `;
@@ -649,9 +747,9 @@ class BoardGame {
                     <div class="text-white-50 small text-uppercase">Level</div>
                     <div class="fs-4 fw-bold"><i class="bi bi-graph-up-arrow me-1"></i><span id="game-level">${this.level}</span></div>
                  </div>
-                 <div class="stat-card border-danger" style="opacity: ${this.streak > 1 ? '1' : '0.5'}">
+                 <div class="stat-card border-danger" id="streak-panel" style="opacity: ${this.streak > 1 ? '1' : '0.5'}">
                     <div class="text-danger small text-uppercase">Streak</div>
-                    <div class="fs-4 fw-bold"><i class="bi bi-fire me-1"></i><span id="game-streak">${this.streak}</span></div>
+                    <div class="fs-4 fw-bold"><i class="bi bi-fire me-1" id="streak-icon"></i><span id="game-streak">${this.streak}</span></div>
                  </div>
              </div>
              
@@ -672,7 +770,16 @@ class BoardGame {
                      <h4 class="fw-bold">Establishing HLQ...</h4>
                      <p class="small opacity-75">Generating assets for ${this.domain}...</p>` 
                     : 
-                    `<div id="dice-display" class="mb-3"><i class="bi bi-dice-6"></i></div>
+                    `<div class="dice-scene">
+                       <div class="cube" id="dice-cube">
+                         <div class="cube__face cube__face--1 face-1"><div class="dot"></div></div>
+                         <div class="cube__face cube__face--2 face-2"><div class="dot"></div><div class="dot"></div></div>
+                         <div class="cube__face cube__face--3 face-3"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+                         <div class="cube__face cube__face--4 face-4"><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+                         <div class="cube__face cube__face--5 face-5"><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+                         <div class="cube__face cube__face--6 face-6"><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+                       </div>
+                     </div>
                      <button id="roll-btn" class="shadow-lg">ROLL DICE</button>
                      <p class="mt-4 opacity-75 small text-uppercase fw-bold" id="game-log" style="letter-spacing: 1px;">Press Roll to start!</p>`
                   }
@@ -695,7 +802,7 @@ class BoardGame {
             <div id="modal-feedback" class="mt-3 d-none"></div>
           </div>
           <div class="modal-footer mt-4 text-end">
-            <button class="btn btn-light px-4 d-none" id="modal-close-btn">Continue</button>
+            <button class="btn btn-primary px-4 d-none" id="modal-close-btn">Continue</button>
           </div>
         </div>
       </div>
@@ -838,7 +945,16 @@ async generateBoardContent(domain) {
       this.container.querySelector('.board-center').innerHTML = `
              <h2 class="text-white mb-2" style="text-shadow:0 0 10px white; text-transform: capitalize;">${domain}</h2>
              <div class="small text-white-50 mb-4">STRATEGY EDITION • ${this.difficulty.toUpperCase()}</div>
-             <div id="dice-display" class="mb-3"><i class="bi bi-dice-6"></i></div>
+             <div class="dice-scene">
+               <div class="cube" id="dice-cube">
+                 <div class="cube__face cube__face--1 face-1"><div class="dot"></div></div>
+                 <div class="cube__face cube__face--2 face-2"><div class="dot"></div><div class="dot"></div></div>
+                 <div class="cube__face cube__face--3 face-3"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+                 <div class="cube__face cube__face--4 face-4"><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+                 <div class="cube__face cube__face--5 face-5"><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+                 <div class="cube__face cube__face--6 face-6"><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+               </div>
+             </div>
              <button id="roll-btn" class="btn btn-primary btn-lg px-5 shadow-lg">ROLL DICE</button>
              <p class="mt-3 text-white-50 small" id="game-log">Press Roll to start!</p>
       `;
@@ -880,30 +996,93 @@ async generateBoardContent(domain) {
     this.isRolling = true;
     this.sounds.play('roll');
     
+    // Disable button
     const btn = this.container.querySelector('#roll-btn');
     if (btn) btn.disabled = true;
     
-    const diceDisplay = this.container.querySelector('#dice-display');
-    diceDisplay.classList.add('rolling');
+    const cube = this.container.querySelector('#dice-cube');
     
-    let rolls = 0;
-    const interval = setInterval(() => {
-      const face = Math.floor(Math.random() * 6) + 1;
-      diceDisplay.innerHTML = `<i class="bi bi-dice-${face}"></i>`;
-      rolls++;
-      if (rolls > 12) {
-        clearInterval(interval);
-        this.finishRoll(face);
-      }
-    }, 80);
+    // Initial "Chaos" Spin - spin wildly before landing
+    // We add to current rotation to prevent distinct unwinding
+    // If this is the first roll, initialize rotation tracking
+    if (!this.currentRotation) this.currentRotation = { x: 0, y: 0 };
+    
+    // Spin it 2-4 times (720-1440 deg) plus some random noise
+    const spinX = 720 + Math.random() * 720;
+    const spinY = 720 + Math.random() * 720;
+    
+    // Temporarily speed up transition for the "toss"
+    cube.style.transition = "transform 0.4s linear";
+    cube.style.transform = `translateZ(-50px) rotateX(${this.currentRotation.x + spinX}deg) rotateY(${this.currentRotation.y + spinY}deg)`;
+    
+    // determine result
+    const face = Math.floor(Math.random() * 6) + 1;
+    
+    // Wait for "spin" time then land
+    setTimeout(() => {
+        this.finishRoll(face, cube);
+    }, 400); // Shorter throw phase
   }
 
-  async finishRoll(roll) {
-    const diceDisplay = this.container.querySelector('#dice-display');
-    diceDisplay.classList.remove('rolling');
+  async finishRoll(roll, cube) {
     this.isRolling = false;
     
+    // Target Rotation Mapping (to show the face front)
+    // Front(1): 0,0
+    // Right(2): 0, -90
+    // Back(3): 0, 180
+    // Left(4): 0, 90
+    // Top(5): -90, 0
+    // Bottom(6): 90, 0
+    
+    let targetX = 0;
+    let targetY = 0;
+
+    switch(roll) {
+        case 1: targetX = 0; targetY = 0; break;
+        case 2: targetX = 0; targetY = -90; break;
+        case 3: targetX = 0; targetY = 180; break;
+        case 4: targetX = 0; targetY = 90; break;
+        case 5: targetX = -90; targetY = 0; break;
+        case 6: targetX = 90; targetY = 0; break;
+    }
+    
+    // Calculate the NEAREST multiple of 360 to land on this face
+    // to ensure we continue rotating forward or settle naturally
+    
+    // Normalize current rotation to remove full spins for calculation
+    // but keep the full value for the animation
+    const currentX = this.currentRotation ? this.currentRotation.x : 0;
+    const currentY = this.currentRotation ? this.currentRotation.y : 0;
+    
+    // We want to land on targetX/Y mod 360
+    // But we want the total value to be > current value (forward spin)
+    // Add at least 2 full spins (720) for the settling phase
+    const minSpins = 2; // 720 degrees
+    
+    // Ensure we land exactly on the face offset
+    // Formula: Find next Multiple of 360 that aligns with target offset
+    // We add arbitrary spins then adjust to match modulo
+    
+    let nextX = currentX + (360 * minSpins);
+    let nextY = currentY + (360 * minSpins);
+    
+    // Adjust remainder to match target
+    const remainderX = nextX % 360;
+    nextX += (targetX - remainderX);
+    
+    const remainderY = nextY % 360;
+    nextY += (targetY - remainderY);
+    
+    // Update state
+    this.currentRotation = { x: nextX, y: nextY };
+    
+    // Apply realistic ease-out transition
+    cube.style.transition = "transform 1.2s cubic-bezier(0.15, 0.9, 0.35, 1.0)";
+    cube.style.transform = `translateZ(-50px) rotateX(${nextX}deg) rotateY(${nextY}deg)`;
+
     this.log(`Rolled a ${roll}!`);
+    await new Promise(r => setTimeout(r, 1200)); // Wait for animation to settle
     
     // Step-by-step move
     for (let i = 0; i < roll; i++) {
@@ -1062,6 +1241,11 @@ async generateBoardContent(domain) {
           <strong>Generation Error:</strong> ${e.message}<br>
           <small class="d-block mt-2 text-muted">Try rolling again.</small>
         </div>`;
+        
+        // Validate: Ensure user can close the modal on error
+        const closeBtn = this.container.querySelector('#modal-close-btn');
+        closeBtn.classList.remove('d-none');
+        closeBtn.textContent = "Close";
     }
   }
 
@@ -1126,6 +1310,7 @@ async generateBoardContent(domain) {
           btn.classList.remove('btn-outline-light');
           btn.classList.add('btn-success');
           this.sounds.play('correct');
+          this.confetti.fireworks();
           
           // Streak Logic
           this.streak++;
@@ -1182,6 +1367,7 @@ async generateBoardContent(domain) {
       if (newLevel > this.level) {
           this.level = newLevel;
           this.sounds.play('levelup');
+          this.confetti.fireworks();
           this.log(`🎉 LEVEL UP! You are now Level ${this.level}`);
           
           // Show perk badge temporarily
@@ -1260,8 +1446,15 @@ async generateBoardContent(domain) {
 
       const st = this.container.querySelector('#game-streak');
       const stPanel = this.container.querySelector('#streak-panel');
+      const stIcon = this.container.querySelector('#streak-icon');
+      
       if(st) st.textContent = this.streak;
       if(stPanel) stPanel.style.opacity = this.streak > 0 ? '1' : '0.5';
+      
+      if(stIcon) {
+          if(this.streak > 0) stIcon.classList.add('fire-active');
+          else stIcon.classList.remove('fire-active');
+      }
   }
 
   log(text) {
