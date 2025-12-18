@@ -405,11 +405,9 @@ class BoardGame {
 
     // Restore Center Hub content
       this.container.querySelector('.board-center').innerHTML = `
-             <h2 class="text-white mb-2" style="text-shadow:0 0 10px white; text-transform: capitalize;">${this.domain}</h2>
-             <div class="small text-white-50 mb-4">STRATEGY EDITION • ${this.difficulty.toUpperCase()}</div>
-             <div id="dice-display" class="mb-3"><i class="bi bi-dice-6"></i></div>
-             <button id="roll-btn" class="btn btn-primary btn-lg px-5 shadow-lg">ROLL DICE</button>
-             <p class="mt-3 text-white-50 small" id="game-log">Welcome back!</p>
+             <div id="dice-display" class="mb-4"><i class="bi bi-dice-6"></i></div>
+             <button id="roll-btn" class="shadow-lg">ROLL DICE</button>
+             <p class="mt-4 opacity-75 small text-uppercase fw-bold" id="game-log" style="letter-spacing: 1px;">Welcome back!</p>
       `;
 
     // Move Token
@@ -626,49 +624,61 @@ class BoardGame {
   renderLayout(isLoading = false) {
     this.container.classList.add('game-active'); // Enable Dark Board Mode
     this.container.innerHTML = `
-      <div class="d-flex justify-content-between align-items-center mb-3">
-          <div class="score-panel d-flex gap-3 align-items-center m-0">
-            <div class="score-item border border-warning text-warning"><i class="bi bi-coin"></i> <span id="game-score">${this.score}</span></div>
-            <div class="score-item border border-info text-info"><i class="bi bi-mortarboard-fill"></i> <span id="game-knowledge">${this.xp}</span> XP</div>
-            
-            <!-- Level Badge with Tooltip -->
-            <div class="score-item border border-light text-white position-relative" id="level-badge" title="Current Level">
-                <i class="bi bi-graph-up-arrow"></i> Lvl <span id="game-level">${this.level}</span>
-                <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" id="perk-badge" style="display: none; font-size: 0.6rem;">
-                    PERK
-                </span>
-            </div>
+      <div class="game-layout">
+          <!-- SIDEBAR (Stats & Info) -->
+          <div class="game-sidebar">
+             <div class="mb-4 text-center text-lg-start">
+                <h1 class="game-font-title mb-1" style="background: linear-gradient(135deg, #0d6efd, #0dcaf0); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">
+                    ${this.domain ? this.domain : 'Loading...'}
+                </h1>
+                <div class="text-uppercase fw-bold text-muted small" style="letter-spacing: 2px;">
+                    Strategy Edition • <span class="text-primary">${this.difficulty ? this.difficulty : 'Normal'}</span>
+                </div>
+             </div>
 
-            <!-- Streak Panel -->
-            <div class="score-item border border-danger text-danger" id="streak-panel" style="opacity: ${this.streak > 1 ? '1' : '0.5'}">
-                <i class="bi bi-fire"></i> <span id="game-streak">${this.streak}</span>
-            </div>
+             <div class="stats-grid mb-4">
+                 <div class="stat-card border-warning">
+                    <div class="text-warning small text-uppercase">Credits</div>
+                    <div class="fs-4 fw-bold"><i class="bi bi-coin me-1"></i><span id="game-score">${this.score}</span></div>
+                 </div>
+                 <div class="stat-card border-info">
+                    <div class="text-info small text-uppercase">XP</div>
+                    <div class="fs-4 fw-bold"><i class="bi bi-mortarboard-fill me-1"></i><span id="game-knowledge">${this.xp}</span></div>
+                 </div>
+                 <div class="stat-card border-light" title="Current Level">
+                    <div class="text-white-50 small text-uppercase">Level</div>
+                    <div class="fs-4 fw-bold"><i class="bi bi-graph-up-arrow me-1"></i><span id="game-level">${this.level}</span></div>
+                 </div>
+                 <div class="stat-card border-danger" style="opacity: ${this.streak > 1 ? '1' : '0.5'}">
+                    <div class="text-danger small text-uppercase">Streak</div>
+                    <div class="fs-4 fw-bold"><i class="bi bi-fire me-1"></i><span id="game-streak">${this.streak}</span></div>
+                 </div>
+             </div>
+             
+             <div class="d-flex justify-content-between align-items-center mt-auto">
+                 <button id="sound-toggle" class="btn btn-outline-secondary btn-sm rounded-circle shadow-sm" style="width: 40px; height: 40px;" title="Toggle Sound">
+                     <i class="bi bi-volume-up-fill"></i>
+                 </button>
+             </div>
           </div>
 
-          <button id="sound-toggle" class="btn btn-outline-secondary btn-sm rounded-circle" style="width: 40px; height: 40px;">
-             <i class="bi bi-volume-up-fill"></i>
-          </button>
-      </div>
-      
-      <div class="text-center text-white-50 mb-3 small">
-        ${this.domain ? this.domain.toUpperCase() : 'LOADING...'} • ${this.difficulty || 'Normal'}
-      </div>
-      
-      <div class="board-container" id="game-board">
-        <!-- Center Hub -->
-        <div class="board-center text-center">
-          ${isLoading ? 
-            `<div class="spinner-border text-primary mb-3" role="status"></div>
-             <h4 class="animate-pulse">Designing "${this.domain}"...</h4>
-             <p class="small text-muted">Generating tiles, rules, and economy...</p>` 
-            : 
-            `<h2 class="text-white mb-2" style="text-shadow:0 0 10px white">${this.domain}</h2>
-             <div class="small text-white-50 mb-4">STRATEGY EDITION</div>
-             <div id="dice-display" class="mb-3"><i class="bi bi-dice-6"></i></div>
-             <button id="roll-btn" class="btn btn-primary btn-lg px-5 shadow-lg">ROLL DICE</button>
-             <p class="mt-3 text-white-50 small" id="game-log">Press Roll to start!</p>`
-          }
-        </div>
+          <!-- MAIN BOARD AREA -->
+          <div class="game-main">
+              <div class="board-container" id="game-board">
+                <!-- Center Hub -->
+                <div class="board-center text-center">
+                  ${isLoading ? 
+                    `<div class="spinner-border text-primary mb-3" role="status" style="width: 3rem; height: 3rem;"></div>
+                     <h4 class="fw-bold">Establishing HLQ...</h4>
+                     <p class="small opacity-75">Generating assets for ${this.domain}...</p>` 
+                    : 
+                    `<div id="dice-display" class="mb-3"><i class="bi bi-dice-6"></i></div>
+                     <button id="roll-btn" class="shadow-lg">ROLL DICE</button>
+                     <p class="mt-4 opacity-75 small text-uppercase fw-bold" id="game-log" style="letter-spacing: 1px;">Press Roll to start!</p>`
+                  }
+                </div>
+              </div>
+          </div>
       </div>
 
       <!-- Question Modal -->
